@@ -1,9 +1,11 @@
 [project]
 name = "kws-accent-robustness"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.0.1"
+description = "Measuring and reducing the accuracy gap of a keyword-spotting CNN on Serbian-accented speech."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "ipykernel>=7.3.0",
+    "torch>=2.14.0",
+    "torchaudio>=2.11.0",
 ]
