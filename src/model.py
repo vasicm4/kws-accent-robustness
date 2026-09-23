@@ -18,8 +18,9 @@ class ConvBlock(nn.Module):
         return x
 
 class KWSNet(nn.Module):
-    def __init__(self, n_classes: int = 10, dropout: float = 0.3):
+    def __init__(self, n_classes: int = 12, dropout: float = 0.3):
         super().__init__()
+        self.input_norm = nn.BatchNorm2d(1)
         self.features = nn.Sequential(
             ConvBlock(1, 16),
             ConvBlock(16, 32),
@@ -31,6 +32,7 @@ class KWSNet(nn.Module):
         self.fc = nn.Linear(128, n_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.input_norm(x)
         x = self.features(x)
         x = self.gap(x)
         x = torch.flatten(x,1)
