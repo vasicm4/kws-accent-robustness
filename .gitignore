@@ -224,3 +224,4 @@ data/
 
 # Training outputs (checkpoints, logs, metrics)
 runs/
+mlruns/

@@ -36,3 +36,8 @@ weight_decay: 1.0e-2    # AdamW
 patience: 10            # epochs without val macro-F1 improvement before stopping; generous,
                         # because val often plateaus mid-run and improves again as the LR decays
 num_workers: 4
+
+# --- Tracking ---
+mlflow: true            # log params, per-epoch metrics and the run dir to MLflow
+mlflow_dir: mlruns      # relative to the repo root; holds mlflow.db and artifacts/
+mlflow_experiment: kws-accent-robustness

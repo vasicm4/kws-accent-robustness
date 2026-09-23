@@ -5,10 +5,12 @@ import json
 import math
 import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
+import mlflow
 import torch
 import torch.nn as nn
 import yaml
@@ -164,6 +166,34 @@ def make_logger(log_path: Path) -> Callable[[str], None]:
     return log
 
 
+@contextmanager
+def mlflow_run(
+    config: dict, run_name: str, sha: str | None, dirty: bool | None
+) -> Iterator[bool]:
+    """Open an MLflow run when config["mlflow"] is on; yields whether tracking is active.
+
+    Everything lives under mlflow_dir: runs in mlflow.db, files in artifacts/.
+    Browse with: uv run mlflow ui --backend-store-uri sqlite:///mlruns/mlflow.db
+    """
+    if not config["mlflow"]:
+        yield False
+        return
+
+    store = resolve_path(config["mlflow_dir"])
+    store.mkdir(parents=True, exist_ok=True)
+    mlflow.set_tracking_uri(f"sqlite:///{store / 'mlflow.db'}")
+    experiment = config["mlflow_experiment"]
+    if mlflow.get_experiment_by_name(experiment) is None:
+        mlflow.create_experiment(experiment, artifact_location=(store / "artifacts").as_uri())
+    mlflow.set_experiment(experiment)
+
+    # A crash inside the block marks the run FAILED instead of leaving it RUNNING.
+    with mlflow.start_run(run_name=run_name):
+        mlflow.log_params(config)
+        mlflow.set_tags({"git_sha": str(sha), "git_dirty": str(dirty)})
+        yield True
+
+
 def main(argv: list[str] | None = None) -> Path:
     args = parse_args(argv)
     config = load_config(args.config, args.overrides)
@@ -177,6 +207,22 @@ def main(argv: list[str] | None = None) -> Path:
     log(f"run dir: {run_dir}")
     log(f"git: {sha}{' (uncommitted changes)' if dirty else ''}")
 
+    with mlflow_run(config, run_dir.name, sha, dirty) as tracking:
+        fit(config, run_dir, log, sha, dirty, tracking)
+        if tracking:
+            mlflow.log_artifacts(str(run_dir))
+    return run_dir
+
+
+def fit(
+    config: dict,
+    run_dir: Path,
+    log: Callable[[str], None],
+    sha: str | None,
+    dirty: bool | None,
+    tracking: bool,
+) -> None:
+    """Train with early stopping, test the best checkpoint, write metrics.json."""
     set_seed(config["seed"])
     train_loader, val_loader, test_loader, label_map = build_loaders(config)
     n_classes = len(label_map)
@@ -210,6 +256,10 @@ def main(argv: list[str] | None = None) -> Path:
             f"| val_loss {val_m['loss']:.4f} | val_acc {val_m['acc']:.4f} "
             f"| val_f1 {val_m['macro_f1']:.4f} | lr {train_m['lr']:.2e} | {train_m['seconds']:.1f}s"
         )
+        if tracking:
+            mlflow.log_metrics(
+                {k: v for k, v in history[-1].items() if k != "epoch"}, step=epoch
+            )
 
         if val_m["macro_f1"] > best_f1:
             best_f1, best_epoch, bad_epochs, best_val = val_m["macro_f1"], epoch, 0, val_m
@@ -249,7 +299,13 @@ def main(argv: list[str] | None = None) -> Path:
         "history": history,
     }
     (run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
-    return run_dir
+    if tracking:
+        mlflow.log_metrics({
+            "best_epoch": best_epoch,
+            "stopped_epoch": metrics["stopped_epoch"],
+            **{f"best_val_{k}": v for k, v in best_val.items()},
+            **{f"test_{k}": v for k, v in test_m.items()},
+        })
 
 
 if __name__ == "__main__":

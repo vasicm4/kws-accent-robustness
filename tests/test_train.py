@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 
+import mlflow
 import train
 from evaluate import evaluate
 
@@ -31,6 +32,7 @@ def test_main_smoke(corpus: Path, tmp_path: Path) -> None:
         "max_epochs=2",
         "batch_size=4",
         "num_workers=0",
+        "mlflow=false",
     ])
 
     for name in ("config.yaml", "train.log", "best.pt", "metrics.json"):
@@ -68,3 +70,28 @@ def test_cosine_schedule_warms_up_then_decays() -> None:
 
 def test_constant_schedule_stays_at_peak_after_warmup() -> None:
     assert _lrs_per_step("constant")[4:] == pytest.approx([1.0] * 16)
+
+
+def test_main_logs_run_to_mlflow(corpus: Path, tmp_path: Path) -> None:
+    store = tmp_path / "mlruns"
+    run_dir = train.main([
+        "--set",
+        f"data_root={corpus}",
+        f"output_dir={tmp_path / 'runs'}",
+        f"mlflow_dir={store}",
+        "max_epochs=2",
+        "batch_size=4",
+        "num_workers=0",
+    ])
+
+    client = mlflow.MlflowClient(tracking_uri=f"sqlite:///{store / 'mlflow.db'}")
+    experiment = client.get_experiment_by_name("kws-accent-robustness")
+    (run,) = client.search_runs([experiment.experiment_id])
+
+    assert run.info.status == "FINISHED"
+    assert run.info.run_name == run_dir.name
+    assert run.data.params["lr_schedule"] == "cosine"
+    assert {"test_acc", "test_macro_f1", "best_epoch"} <= run.data.metrics.keys()
+    assert len(client.get_metric_history(run.info.run_id, "val_macro_f1")) == 2
+    artifacts = {a.path for a in client.list_artifacts(run.info.run_id)}
+    assert {"best.pt", "metrics.json", "train.log", "config.yaml"} <= artifacts
