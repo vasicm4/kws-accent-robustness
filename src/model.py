@@ -33,6 +33,7 @@ class KWSNet(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.features(x)
         x = self.gap(x)
+        x = torch.flatten(x,1)
         x = self.dropout(x)
         x = self.fc(x)
         return x
