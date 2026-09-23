@@ -13,5 +13,5 @@ dependencies = [
     "soundfile",
     "numpy",
     "pyyaml",
-    "scikit-learn"
+    "scikit-learn",
 ]

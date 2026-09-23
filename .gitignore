@@ -218,3 +218,6 @@ __marimo__/
 .streamlit/secrets.toml
 
 uv.lock
+
+# Project data (fetched by scripts/download_data.py)
+data/

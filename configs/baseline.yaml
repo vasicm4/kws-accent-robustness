@@ -1,0 +1,35 @@
+# E0: baseline CNN, no augmentation.
+# Flat on purpose: data.py reads these keys directly, and any key can be
+# overridden from the command line, e.g. --set lr=3e-3 seed=1
+#
+# Write floats with a decimal point (1.0e-3, not 1e-3): PyYAML reads 1e-3
+# as a string.
+
+# --- Experiment ---
+name: e0_baseline
+seed: 0
+output_dir: runs
+
+# --- Data ---
+data_root: data/speech_commands_v0.02   # relative to the repo root; fetch with scripts/download_data.py
+sample_rate: 16000
+clip_duration_seconds: 1.0
+unknown_ratio: 1.0      # _unknown_ clips per split, relative to the average target-word count
+silence_ratio: 1.0      # same, for _silence_ crops from _background_noise_
+augment: false
+
+# --- Features (log-mel) ---
+n_fft: 400              # 25 ms window at 16 kHz
+hop_length: 160         # 10 ms hop -> 101 frames per 1 s clip
+n_mels: 40
+
+# --- Model ---
+dropout: 0.3
+
+# --- Training ---
+batch_size: 128
+max_epochs: 50          # upper bound; early stopping usually ends the run sooner
+lr: 1.0e-3              # the hyperparameter swept in HP (3.0e-4, 1.0e-3, 3.0e-3)
+weight_decay: 1.0e-2    # AdamW
+patience: 5             # epochs without val macro-F1 improvement before stopping
+num_workers: 4
