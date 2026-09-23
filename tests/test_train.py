@@ -43,3 +43,28 @@ def test_main_smoke(corpus: Path, tmp_path: Path) -> None:
     checkpoint = torch.load(run_dir / "best.pt")
     assert checkpoint["epoch"] == metrics["best_epoch"]
     assert len(checkpoint["label_map"]) == 12
+
+
+def _lrs_per_step(schedule: str, steps_per_epoch: int = 4) -> list[float]:
+    optimizer = torch.optim.SGD([nn.Parameter(torch.zeros(1))], lr=1.0)
+    config = {"lr_schedule": schedule, "warmup_epochs": 1, "max_epochs": 5}
+    scheduler = train.make_scheduler(optimizer, config, steps_per_epoch)
+    lrs = []
+    for _ in range(5 * steps_per_epoch):
+        lrs.append(optimizer.param_groups[0]["lr"])
+        optimizer.step()
+        scheduler.step()
+    return lrs
+
+
+def test_cosine_schedule_warms_up_then_decays() -> None:
+    lrs = _lrs_per_step("cosine")
+
+    assert lrs[:4] == pytest.approx([0.25, 0.5, 0.75, 1.0])
+    decay = lrs[4:]
+    assert all(a >= b for a, b in zip(decay, decay[1:]))
+    assert decay[-1] < 0.02
+
+
+def test_constant_schedule_stays_at_peak_after_warmup() -> None:
+    assert _lrs_per_step("constant")[4:] == pytest.approx([1.0] * 16)

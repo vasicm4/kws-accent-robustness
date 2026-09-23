@@ -28,8 +28,11 @@ dropout: 0.3
 
 # --- Training ---
 batch_size: 128
-max_epochs: 50          # upper bound; early stopping usually ends the run sooner
-lr: 1.0e-3              # the hyperparameter swept in HP (3.0e-4, 1.0e-3, 3.0e-3)
+max_epochs: 30          # also the cosine horizon: the LR reaches 0 at the end of this epoch
+lr: 1.0e-3              # peak LR after warmup; the hyperparameter swept in HP (3.0e-4, 1.0e-3, 3.0e-3)
+lr_schedule: cosine     # cosine | constant
+warmup_epochs: 1        # linear warmup from ~0 to lr
 weight_decay: 1.0e-2    # AdamW
-patience: 5             # epochs without val macro-F1 improvement before stopping
+patience: 10            # epochs without val macro-F1 improvement before stopping; generous,
+                        # because val often plateaus mid-run and improves again as the LR decays
 num_workers: 4

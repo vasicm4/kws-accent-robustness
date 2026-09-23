@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import subprocess
 import time
 from collections.abc import Callable
@@ -82,14 +83,36 @@ def build_loaders(
     return train_loader, val_loader, test_loader, train_ds.label_map
 
 
+def make_scheduler(
+    optimizer: torch.optim.Optimizer, config: dict, steps_per_epoch: int
+) -> torch.optim.lr_scheduler.LambdaLR:
+    schedule = config["lr_schedule"]
+    if schedule not in ("cosine", "constant"):
+        raise ValueError(f"unknown lr_schedule {schedule!r}, expected 'cosine' or 'constant'")
+    warmup_steps = config["warmup_epochs"] * steps_per_epoch
+    total_steps = config["max_epochs"] * steps_per_epoch
+
+    def factor(step: int) -> float:
+        if step < warmup_steps:
+            return (step + 1) / warmup_steps
+        if schedule == "constant":
+            return 1.0
+        progress = (step - warmup_steps) / max(1, total_steps - warmup_steps)
+        return 0.5 * (1.0 + math.cos(math.pi * min(progress, 1.0)))
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, factor)
+
+
 def train_one_epoch(
     model: nn.Module,
     loader: DataLoader,
     optimizer: torch.optim.Optimizer,
+    scheduler: torch.optim.lr_scheduler.LRScheduler,
     criterion: nn.Module,
 ) -> dict[str, float]:
     model.train()
     start = time.perf_counter()
+    lr = optimizer.param_groups[0]["lr"]
     total_loss, correct, seen = 0.0, 0, 0
     for features, labels in loader:
         optimizer.zero_grad()
@@ -97,6 +120,7 @@ def train_one_epoch(
         loss = criterion(logits, labels)
         loss.backward()
         optimizer.step()
+        scheduler.step()
 
         total_loss += loss.item() * len(labels)
         correct += (logits.argmax(dim=1) == labels).sum().item()
@@ -104,6 +128,7 @@ def train_one_epoch(
     return {
         "loss": total_loss / seen,
         "acc": correct / seen,
+        "lr": lr,
         "seconds": time.perf_counter() - start,
     }
 
@@ -164,6 +189,7 @@ def main(argv: list[str] | None = None) -> Path:
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=config["lr"], weight_decay=config["weight_decay"]
     )
+    scheduler = make_scheduler(optimizer, config, steps_per_epoch=len(train_loader))
     criterion = nn.CrossEntropyLoss()
 
     checkpoint_path = run_dir / "best.pt"
@@ -172,7 +198,7 @@ def main(argv: list[str] | None = None) -> Path:
     best_val: dict[str, float] = {}
 
     for epoch in range(1, config["max_epochs"] + 1):
-        train_m = train_one_epoch(model, train_loader, optimizer, criterion)
+        train_m = train_one_epoch(model, train_loader, optimizer, scheduler, criterion)
         val_m = evaluate(model, val_loader, criterion, n_classes)
         history.append({
             "epoch": epoch,
@@ -182,7 +208,7 @@ def main(argv: list[str] | None = None) -> Path:
         log(
             f"epoch {epoch:2d} | train_loss {train_m['loss']:.4f} | train_acc {train_m['acc']:.4f} "
             f"| val_loss {val_m['loss']:.4f} | val_acc {val_m['acc']:.4f} "
-            f"| val_f1 {val_m['macro_f1']:.4f} | {train_m['seconds']:.1f}s"
+            f"| val_f1 {val_m['macro_f1']:.4f} | lr {train_m['lr']:.2e} | {train_m['seconds']:.1f}s"
         )
 
         if val_m["macro_f1"] > best_f1:
