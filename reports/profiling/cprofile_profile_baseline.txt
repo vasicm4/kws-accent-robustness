@@ -1,0 +1,55 @@
+# profile_epoch.py --mode cprofile
+# date: 2026-10-07 21:11
+# git: 23d13be (uncommitted changes)
+# cpu: AMD Ryzen 7 7735HS with Radeon Graphics (8 torch threads, 4 DataLoader workers)
+# torch 2.14.0+cu130, batch_size 128
+## one epoch: 30.8s | data 0.8s | compute 30.0s (cProfile overhead included)
+
+         433955 function calls (417576 primitive calls) in 30.772 seconds
+
+   Ordered by: cumulative time
+   List reduced from 568 to 40 due to restriction <40>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      289    0.002    0.000   19.054    0.066 _tensor.py:566(backward)
+      289    0.006    0.000   19.052    0.066 __init__.py:255(backward)
+      289    0.004    0.000   19.036    0.066 graph.py:1059(_engine_run_backward)
+      289   19.003    0.066   19.003    0.066 {method 'run_backward' of 'torch._C._EngineBase' objects}
+ 7514/578    0.024    0.000   10.576    0.018 module.py:1779(_wrapped_call_impl)
+ 7514/578    0.038    0.000   10.574    0.018 module.py:1787(_call_impl)
+      289    0.004    0.000   10.555    0.037 model.py:33(forward)
+      289    0.004    0.000   10.430    0.036 container.py:254(forward)
+     1156    0.022    0.000   10.415    0.009 model.py:13(forward)
+     1156    0.005    0.000    4.361    0.004 conv.py:564(forward)
+     1156    0.006    0.000    4.350    0.004 conv.py:546(_conv_forward)
+     1156    4.344    0.004    4.344    0.004 {built-in method torch.conv2d}
+     1156    0.012    0.000    2.662    0.002 batchnorm.py:176(forward)
+      867    0.006    0.000    2.642    0.003 pooling.py:222(forward)
+      867    0.004    0.000    2.635    0.003 _jit_internal.py:627(fn)
+      867    0.004    0.000    2.631    0.003 functional.py:814(_max_pool2d)
+      867    2.627    0.003    2.627    0.003 {built-in method torch.max_pool2d}
+     1156    0.017    0.000    2.616    0.002 functional.py:2865(batch_norm)
+     1156    2.590    0.002    2.590    0.002 {built-in method torch.batch_norm}
+      2/1    0.012    0.006    2.558    2.558 train.py:115(train_one_epoch)
+     1156    0.004    0.000    0.667    0.001 activation.py:139(forward)
+     1156    0.005    0.000    0.662    0.001 functional.py:1766(relu)
+     1156    0.657    0.001    0.657    0.001 {built-in method torch.relu_}
+      290    0.003    0.000    0.503    0.002 dataloader.py:720(__next__)
+      290    0.002    0.000    0.489    0.002 dataloader.py:1470(_next_data)
+      289    0.001    0.000    0.467    0.002 dataloader.py:1435(_get_data)
+      289    0.001    0.000    0.467    0.002 dataloader.py:1280(_try_get_data)
+      289    0.002    0.000    0.466    0.002 queues.py:98(get)
+      289    0.011    0.000    0.332    0.001 {built-in method _pickle.loads}
+      289    0.002    0.000    0.311    0.001 lr_scheduler.py:162(wrapper)
+      289    0.008    0.000    0.309    0.001 optimizer.py:528(wrapper)
+      578    0.004    0.000    0.303    0.001 reductions.py:537(rebuild_storage_fd)
+      578    0.003    0.000    0.278    0.000 resource_sharer.py:55(detach)
+      289    0.004    0.000    0.278    0.001 optimizer.py:59(_use_grad)
+      289    0.003    0.000    0.271    0.001 adam.py:214(step)
+      289    0.001    0.000    0.237    0.001 optimizer.py:140(maybe_fallback)
+      289    0.003    0.000    0.236    0.001 adam.py:902(adam)
+      578    0.004    0.000    0.234    0.000 resource_sharer.py:81(get_connection)
+      289    0.069    0.000    0.226    0.001 adam.py:347(_single_tensor_adam)
+      578    0.002    0.000    0.212    0.000 connection.py:510(Client)
+
+

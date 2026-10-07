@@ -36,6 +36,7 @@ weight_decay: 1.0e-2    # AdamW
 patience: 10            # epochs without val macro-F1 improvement before stopping; generous,
                         # because val often plateaus mid-run and improves again as the LR decays
 num_workers: 4
+num_threads: null       # torch intra-op threads for the training step; null = PyTorch default
 
 # --- Tracking ---
 mlflow: true            # log params, per-epoch metrics and the run dir to MLflow

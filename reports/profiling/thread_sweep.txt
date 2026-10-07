@@ -1,0 +1,27 @@
+# thread x worker sweep, 2026-10-07 21:12, git 23d13be + uncommitted changes, AMD Ryzen 7 7735HS with Radeon Graphics
+# for t in 2 4 6 8; do for w in 2 4; do uv run python scripts/profile_epoch.py --mode epoch --epochs 2 --set num_threads=$t num_workers=$w; done; done
+# epoch 1 also warms the file cache; compare epoch 2
+## num_threads=2 num_workers=2
+epoch 1 | 54.2s | data 0.5s | compute 53.7s
+epoch 2 | 54.4s | data 0.4s | compute 54.0s
+## num_threads=2 num_workers=4
+epoch 1 | 49.8s | data 0.6s | compute 49.2s
+epoch 2 | 50.4s | data 0.5s | compute 50.0s
+## num_threads=4 num_workers=2
+epoch 1 | 33.9s | data 0.5s | compute 33.4s
+epoch 2 | 33.4s | data 0.5s | compute 33.0s
+## num_threads=4 num_workers=4
+epoch 1 | 32.1s | data 0.6s | compute 31.5s
+epoch 2 | 32.6s | data 0.5s | compute 32.1s
+## num_threads=6 num_workers=2
+epoch 1 | 27.4s | data 0.5s | compute 26.9s
+epoch 2 | 27.5s | data 0.5s | compute 27.0s
+## num_threads=6 num_workers=4
+epoch 1 | 27.3s | data 0.6s | compute 26.7s
+epoch 2 | 28.1s | data 0.5s | compute 27.6s
+## num_threads=8 num_workers=2
+epoch 1 | 30.7s | data 0.5s | compute 30.2s
+epoch 2 | 28.3s | data 0.5s | compute 27.9s
+## num_threads=8 num_workers=4
+epoch 1 | 28.9s | data 0.6s | compute 28.3s
+epoch 2 | 28.7s | data 0.5s | compute 28.2s

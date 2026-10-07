@@ -1,0 +1,55 @@
+# profile_epoch.py --mode cprofile
+# date: 2026-10-07 21:12
+# git: 23d13be (uncommitted changes)
+# cpu: AMD Ryzen 7 7735HS with Radeon Graphics (8 torch threads, 0 DataLoader workers)
+# torch 2.14.0+cu130, batch_size 128
+## one epoch: 46.9s | data 17.9s | compute 28.9s (cProfile overhead included)
+
+         11310698 function calls (10704658 primitive calls) in 46.864 seconds
+
+   Ordered by: cumulative time
+   List reduced from 383 to 40 due to restriction <40>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.017    0.017   46.864   46.864 train.py:115(train_one_epoch)
+      289    0.003    0.000   19.038    0.066 _tensor.py:566(backward)
+      289    0.007    0.000   19.035    0.066 __init__.py:255(backward)
+      289    0.005    0.000   19.017    0.066 graph.py:1059(_engine_run_backward)
+      289   18.974    0.066   18.974    0.066 {method 'run_backward' of 'torch._C._EngineBase' objects}
+155206/74424    0.189    0.000   18.698    0.000 module.py:1779(_wrapped_call_impl)
+155206/74424    0.253    0.000   18.616    0.000 module.py:1787(_call_impl)
+      290    0.003    0.000   17.932    0.062 dataloader.py:720(__next__)
+      290    0.013    0.000   17.914    0.062 dataloader.py:783(_next_data)
+      289    0.043    0.000   17.885    0.062 fetch.py:49(fetch)
+    36923    0.167    0.000   17.698    0.000 data.py:238(__getitem__)
+    36923    0.188    0.000   11.152    0.000 data.py:212(extract_features)
+      289    0.004    0.000    9.485    0.033 model.py:33(forward)
+      289    0.004    0.000    9.351    0.032 container.py:254(forward)
+     1156    0.022    0.000    9.335    0.008 model.py:13(forward)
+    36923    0.075    0.000    7.903    0.000 _transforms.py:621(forward)
+    36923    0.077    0.000    6.401    0.000 _transforms.py:101(forward)
+    36923    0.230    0.000    6.311    0.000 functional.py:54(spectrogram)
+    36923    0.107    0.000    5.966    0.000 soundfile.py:225(read)
+    33846    0.067    0.000    5.657    0.000 data.py:156(load_waveform)
+     1156    0.005    0.000    4.085    0.004 conv.py:564(forward)
+     1156    0.006    0.000    4.079    0.004 conv.py:546(_conv_forward)
+     1156    4.072    0.004    4.072    0.004 {built-in method torch.conv2d}
+    36923    2.804    0.000    2.804    0.000 {method 'abs' of 'torch._C.TensorBase' objects}
+    36923    0.195    0.000    2.730    0.000 soundfile.py:591(__init__)
+    36923    0.055    0.000    2.666    0.000 soundfile.py:875(read)
+     1156    0.014    0.000    2.421    0.002 batchnorm.py:176(forward)
+    36923    0.276    0.000    2.355    0.000 functional.py:507(stft)
+     1156    0.014    0.000    2.352    0.002 functional.py:2865(batch_norm)
+     1156    2.326    0.002    2.326    0.002 {built-in method torch.batch_norm}
+    36923    0.303    0.000    2.320    0.000 soundfile.py:1412(_array_io)
+      867    0.006    0.000    2.116    0.002 pooling.py:222(forward)
+      867    0.004    0.000    2.110    0.002 _jit_internal.py:627(fn)
+      867    0.004    0.000    2.106    0.002 functional.py:814(_max_pool2d)
+      867    2.102    0.002    2.102    0.002 {built-in method torch.max_pool2d}
+    36923    1.440    0.000    1.800    0.000 soundfile.py:1269(_open)
+    36923    1.453    0.000    1.725    0.000 soundfile.py:1426(_cdata_io)
+    36923    0.145    0.000    1.403    0.000 _transforms.py:324(__init__)
+    36923    1.337    0.000    1.337    0.000 {built-in method torch.stft}
+    36923    0.066    0.000    1.148    0.000 _transforms.py:407(forward)
+
+
