@@ -92,6 +92,17 @@ def build_loaders(
     return train_loader, val_loader, test_loader, train_ds.label_map
 
 
+def build_model(config: dict, n_classes: int) -> KWSNet:
+    model = KWSNet(
+        n_classes=n_classes, dropout=config["dropout"], strided_stem=config["strided_stem"]
+    )
+    if config["channels_last"]:
+        # Only the weights need converting: a 1-channel input is already
+        # laid out the same way in both formats.
+        model = model.to(memory_format=torch.channels_last)
+    return model
+
+
 def make_scheduler(
     optimizer: torch.optim.Optimizer, config: dict, steps_per_epoch: int
 ) -> torch.optim.lr_scheduler.LambdaLR:
@@ -251,7 +262,7 @@ def fit(
         f"| test {len(test_loader.dataset)} | classes {n_classes}"
     )
 
-    model = KWSNet(n_classes=n_classes, dropout=config["dropout"])
+    model = build_model(config, n_classes)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=config["lr"], weight_decay=config["weight_decay"]
     )

@@ -25,6 +25,7 @@ n_mels: 40
 
 # --- Model ---
 dropout: 0.3
+strided_stem: false     # true: first block downsamples with a stride-2 conv instead of max-pool (faster on CPU)
 
 # --- Training ---
 batch_size: 128
@@ -37,6 +38,8 @@ patience: 10            # epochs without val macro-F1 improvement before stoppin
                         # because val often plateaus mid-run and improves again as the LR decays
 num_workers: 4
 num_threads: null       # torch intra-op threads for the training step; null = PyTorch default
+channels_last: true     # store conv weights in channels_last (NHWC) memory format; ~17% faster
+                        # epochs on CPU. The original E0 run (6e4f52f7) used false.
 
 # --- Tracking ---
 mlflow: true            # log params, per-epoch metrics and the run dir to MLflow

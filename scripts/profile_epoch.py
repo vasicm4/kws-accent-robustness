@@ -33,7 +33,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 import train  # noqa: E402
-from model import KWSNet  # noqa: E402
 from utils import load_config, set_num_threads, set_seed  # noqa: E402
 
 OUT_DIR = REPO_ROOT / "reports" / "profiling"
@@ -155,7 +154,7 @@ def main() -> None:
     set_seed(config["seed"])
     set_num_threads(config["num_threads"])
     train_loader, _, _, label_map = train.build_loaders(config)
-    model = KWSNet(n_classes=len(label_map), dropout=config["dropout"])
+    model = train.build_model(config, len(label_map))
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=config["lr"], weight_decay=config["weight_decay"]
     )

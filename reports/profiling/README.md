@@ -29,6 +29,34 @@ The plan assumed that on-the-fly feature extraction (WAV decode + log-mel in `__
 
 Using fewer than 8 threads is clearly slower. 6 threads is ~3% faster than the default, which is within run-to-run noise from a single run per cell, so the default (`num_threads: null`) is kept. Thread tuning is not the fix.
 
-## Next
+## Fixing the compute bottleneck
 
-The remaining time is in the model, so the next changes to measure are on the compute side: `torch.compile`, `channels_last` memory format, and the cost of the first full-resolution conv block.
+Breaking the forward pass down by block showed the first block taking ~29 of ~44 ms per batch, despite doing ~4% of the FLOPs: it is the only block that computes a full-resolution 16×40×101 map, so its BN, ReLU and max-pool are memory-bound. Candidates, timed on the training step alone (scratch benchmark, 128-clip batches):
+
+| Change | Step time | Kept? |
+|---|---|---|
+| Eager baseline | 92 ms | — |
+| `torch.compile` | 78 ms | No: 12 s compile, no gain on top of `channels_last`, and it wraps the model (checkpoint keys, ONNX export) |
+| `channels_last` weights | 72 ms | Yes (`channels_last: true`) |
+| Stride-2 conv in block 1 instead of conv + max-pool | 44 ms (35 ms with `channels_last`) | Opt-in (`strided_stem: true`); changes the model |
+
+Full epochs, two rounds of 3 epochs each (`compute_sweep.txt`, mean of epochs 2–3):
+
+| Setup | Epoch | vs. baseline |
+|---|---|---|
+| Baseline | 29.3 s | — |
+| `channels_last` | 24.2 s | −17% |
+| strided stem | 20.6 s | −30% |
+| both | **17.7 s** | **−40%** |
+
+## Accuracy check (full 30-epoch runs, seed 0)
+
+| Run | MLflow run | Median epoch | Training time | val macro-F1 | test acc | test macro-F1 |
+|---|---|---|---|---|---|---|
+| E0 baseline (23 Sep) | `6e4f52f7` | 33.5 s | 16.8 min | 0.9490 | 0.9527 | 0.9527 |
+| + `channels_last` | `a1fde9e9` | 22.3 s | 11.2 min | 0.9491 | 0.9482 | 0.9480 |
+| + `channels_last` + strided stem | `ee517c63` | 16.0 s | 8.0 min | 0.9464 | 0.9476 | 0.9475 |
+
+`channels_last` computes the same function in a different memory order, yet test macro-F1 moved by 0.47 points: that is the run-to-run noise floor for a single seed. The strided stem is within that noise (−0.27 val, −0.05 test against the `channels_last` run), but one seed per config cannot show a small real drop, so it stays opt-in until it is compared over 3 seeds.
+
+Net result: an E0 training run went from 16.8 to 11.2 min with no model change, or 8.0 min with the strided stem.
