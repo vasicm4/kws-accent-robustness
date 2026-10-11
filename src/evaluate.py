@@ -36,3 +36,55 @@ def evaluate(
         "acc": float((y_true == y_pred).mean()),
         "macro_f1": float(macro_f1),
     }
+
+
+def group_confusions(
+    y_true: np.ndarray, y_pred: np.ndarray, groups: np.ndarray, n_classes: int
+) -> np.ndarray:
+    """One confusion matrix per group (e.g. speaker): shape (n_groups, n_classes, n_classes)."""
+    _, group_ids = np.unique(groups, return_inverse=True)
+    n_groups = group_ids.max() + 1
+    flat = (group_ids * n_classes + y_true) * n_classes + y_pred
+    counts = np.bincount(flat, minlength=n_groups * n_classes * n_classes)
+    return counts.reshape(n_groups, n_classes, n_classes)
+
+
+def confusion_metrics(
+    cm: np.ndarray, labels: list[int]
+) -> tuple[np.ndarray, np.ndarray]:
+    """Accuracy and macro-F1 over `labels` for one or a stack of confusion matrices.
+
+    cm[..., true, pred]. Macro-F1 matches sklearn's
+    f1_score(labels=labels, average="macro", zero_division=0).
+    """
+    tp = np.diagonal(cm, axis1=-2, axis2=-1)
+    acc = tp.sum(axis=-1) / cm.sum(axis=(-2, -1))
+    # 2TP + FP + FN = (predicted as l) + (truly l)
+    denom = (cm.sum(axis=-2) + cm.sum(axis=-1))[..., labels]
+    f1 = np.divide(
+        2 * tp[..., labels], denom, out=np.zeros(denom.shape), where=denom > 0
+    )
+    return acc, f1.mean(axis=-1)
+
+
+def speaker_bootstrap(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    speakers: np.ndarray,
+    n_classes: int,
+    labels: list[int],
+    n_boot: int,
+    rng: np.random.Generator,
+) -> dict[str, np.ndarray]:
+    """Bootstrap accuracy and macro-F1 by resampling whole speakers with replacement.
+
+    Clips from one speaker are not independent, so resampling clips would
+    understate the uncertainty. Returns n_boot draws of each metric.
+    """
+    cms = group_confusions(y_true, y_pred, speakers, n_classes)
+    n_speakers = len(cms)
+    # How many times each speaker is drawn, per bootstrap sample.
+    weights = rng.multinomial(n_speakers, np.full(n_speakers, 1 / n_speakers), size=n_boot)
+    boot_cms = np.einsum("bs,skl->bkl", weights, cms)
+    acc, macro_f1 = confusion_metrics(boot_cms, labels)
+    return {"acc": acc, "macro_f1": macro_f1}
