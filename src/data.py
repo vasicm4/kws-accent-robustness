@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import os
 import random
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +12,8 @@ import soundfile as sf
 import torch
 import torchaudio
 from torch.utils.data import Dataset
+
+from augment import Augmenter
 
 TARGET_WORDS = ["yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go"]
 SILENCE_LABEL = "_silence_"
@@ -231,9 +234,22 @@ class SpeechCommandsDataset(Dataset):
         self.augment = augment
         self.label_map = build_label_map(TARGET_WORDS)
         self.index: list[IndexEntry] = build_split_index(root, split, config)
+        self.augmenter = Augmenter(root / BACKGROUND_NOISE_DIR, config) if augment else None
+        self._rng: np.random.Generator | None = None
+        self._rng_pid: int | None = None
 
     def __len__(self) -> int:
         return len(self.index)
+
+    def _get_rng(self) -> np.random.Generator:
+        """One generator per process. DataLoader workers start from a copy of
+        the dataset, so a generator made before the fork would give every
+        worker the same augmentations. torch.initial_seed() differs per worker
+        and follows the run seed (the main process's seed when num_workers=0)."""
+        if self._rng is None or self._rng_pid != os.getpid():
+            self._rng = np.random.default_rng(torch.initial_seed())
+            self._rng_pid = os.getpid()
+        return self._rng
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
         entry = self.index[idx]
@@ -250,13 +266,15 @@ class SpeechCommandsDataset(Dataset):
             waveform = load_waveform(entry.path, sample_rate)
             waveform = fix_length(waveform, clip_length)
 
-        if self.augment:
-            # TODO: hook into augment.py (waveform-domain noise/time-shift
-            # here, SpecAugment after extract_features below) once it's
-            # implemented. Raising rather than silently skipping augmentation.
-            raise NotImplementedError("augment.py hooks not implemented yet")
+        rng = self._get_rng() if self.augmenter else None
+        # Silence clips are already background noise: shifting or adding more
+        # noise to them changes nothing useful.
+        if self.augmenter and entry.label != SILENCE_LABEL:
+            waveform = self.augmenter.waveform(waveform, rng)
 
         features = extract_features(waveform, self.config)
+        if self.augmenter:
+            features = self.augmenter.features(features, rng)
         label_idx = self.label_map[entry.label]
         return features, label_idx
 

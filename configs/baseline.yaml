@@ -16,7 +16,19 @@ sample_rate: 16000
 clip_duration_seconds: 1.0
 unknown_ratio: 1.0      # _unknown_ clips per split, relative to the average target-word count
 silence_ratio: 1.0      # same, for _silence_ crops from _background_noise_
-augment: false
+augment: false          # train-time augmentation (E1/E2); the settings below only apply when true
+
+# --- Augmentation (src/augment.py) ---
+# E1: augment=true (time shift + background noise)
+# E2: augment=true spec_freq_masks=2 spec_time_masks=2 (+ SpecAugment)
+time_shift_ms: 100      # uniform shift in [-100, 100] ms, zero-filled
+noise_prob: 0.8         # chance a non-silence clip gets a _background_noise_ crop mixed in
+noise_snr_db_min: 5.0   # SNR drawn uniformly from [min, max] dB
+noise_snr_db_max: 20.0
+spec_freq_masks: 0      # SpecAugment: number of frequency masks (0 = off)
+spec_freq_mask_width: 7 # max mask width in mel bins (of 40)
+spec_time_masks: 0      # number of time masks (0 = off)
+spec_time_mask_width: 10  # max mask width in frames (10 ms each, of 101)
 
 # --- Features (log-mel) ---
 n_fft: 400              # 25 ms window at 16 kHz
