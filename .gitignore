@@ -225,3 +225,8 @@ data/
 # Training outputs (checkpoints, logs, metrics)
 runs/
 mlruns/
+
+# Accented recordings: voices and the file -> speaker mapping stay local
+# unless every speaker consented to publication (see data_accented/README.md)
+data_accented/*
+!data_accented/README.md

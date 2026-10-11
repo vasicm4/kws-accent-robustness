@@ -16,3 +16,7 @@ dependencies = [
     "scikit-learn",
     "mlflow>=3.16.1",
 ]
+
+[project.optional-dependencies]
+# scripts/prepare_accented.py: decode phone/WhatsApp audio, optional Whisper check
+accented = ["av", "faster-whisper"]
