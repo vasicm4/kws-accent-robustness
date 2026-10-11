@@ -19,7 +19,14 @@ from torch.utils.data import DataLoader
 from data import SpeechCommandsDataset
 from evaluate import evaluate
 from model import KWSNet
-from utils import load_config, make_generator, save_config, seed_worker, set_seed
+from utils import (
+    load_config,
+    make_generator,
+    save_config,
+    seed_worker,
+    set_num_threads,
+    set_seed,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -85,6 +92,17 @@ def build_loaders(
     return train_loader, val_loader, test_loader, train_ds.label_map
 
 
+def build_model(config: dict, n_classes: int) -> KWSNet:
+    model = KWSNet(
+        n_classes=n_classes, dropout=config["dropout"], strided_stem=config["strided_stem"]
+    )
+    if config["channels_last"]:
+        # Only the weights need converting: a 1-channel input is already
+        # laid out the same way in both formats.
+        model = model.to(memory_format=torch.channels_last)
+    return model
+
+
 def make_scheduler(
     optimizer: torch.optim.Optimizer, config: dict, steps_per_epoch: int
 ) -> torch.optim.lr_scheduler.LambdaLR:
@@ -116,7 +134,14 @@ def train_one_epoch(
     start = time.perf_counter()
     lr = optimizer.param_groups[0]["lr"]
     total_loss, correct, seen = 0.0, 0, 0
+    # data_seconds: time blocked waiting for the next batch (loading the data
+    # isn't keeping up); compute_seconds: forward, backward and optimizer step.
+    data_seconds, compute_seconds = 0.0, 0.0
+    batch_ready = time.perf_counter()
     for features, labels in loader:
+        step_start = time.perf_counter()
+        data_seconds += step_start - batch_ready
+
         optimizer.zero_grad()
         logits = model(features)
         loss = criterion(logits, labels)
@@ -127,11 +152,15 @@ def train_one_epoch(
         total_loss += loss.item() * len(labels)
         correct += (logits.argmax(dim=1) == labels).sum().item()
         seen += len(labels)
+        batch_ready = time.perf_counter()
+        compute_seconds += batch_ready - step_start
     return {
         "loss": total_loss / seen,
         "acc": correct / seen,
         "lr": lr,
         "seconds": time.perf_counter() - start,
+        "data_seconds": data_seconds,
+        "compute_seconds": compute_seconds,
     }
 
 
@@ -224,6 +253,8 @@ def fit(
 ) -> None:
     """Train with early stopping, test the best checkpoint, write metrics.json."""
     set_seed(config["seed"])
+    set_num_threads(config["num_threads"])
+    log(f"torch threads: {torch.get_num_threads()}")
     train_loader, val_loader, test_loader, label_map = build_loaders(config)
     n_classes = len(label_map)
     log(
@@ -231,7 +262,7 @@ def fit(
         f"| test {len(test_loader.dataset)} | classes {n_classes}"
     )
 
-    model = KWSNet(n_classes=n_classes, dropout=config["dropout"])
+    model = build_model(config, n_classes)
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=config["lr"], weight_decay=config["weight_decay"]
     )
@@ -254,7 +285,8 @@ def fit(
         log(
             f"epoch {epoch:2d} | train_loss {train_m['loss']:.4f} | train_acc {train_m['acc']:.4f} "
             f"| val_loss {val_m['loss']:.4f} | val_acc {val_m['acc']:.4f} "
-            f"| val_f1 {val_m['macro_f1']:.4f} | lr {train_m['lr']:.2e} | {train_m['seconds']:.1f}s"
+            f"| val_f1 {val_m['macro_f1']:.4f} | lr {train_m['lr']:.2e} | {train_m['seconds']:.1f}s "
+            f"(data {train_m['data_seconds']:.1f}s, compute {train_m['compute_seconds']:.1f}s)"
         )
         if tracking:
             mlflow.log_metrics(

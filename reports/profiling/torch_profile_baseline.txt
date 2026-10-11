@@ -1,0 +1,70 @@
+# profile_epoch.py --mode torch
+# date: 2026-10-07 21:12
+# git: 23d13be (uncommitted changes)
+# cpu: AMD Ryzen 7 7735HS with Radeon Graphics (8 torch threads, 4 DataLoader workers)
+# torch 2.14.0+cu130, batch_size 128
+## 50 steps after 10 warmup steps
+
+## By total CPU time (the data/forward/backward/optimizer rows are the step phases)
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                          ProfilerStep*         0.08%       4.097ms       100.00%        5.134s     102.686ms            50  
+                                               backward         0.64%      32.976ms        62.92%        3.231s      64.615ms            50  
+autograd::engine::evaluate_function: ConvolutionBack...         9.24%     474.592ms        37.29%        1.914s       9.572ms           200  
+                                                forward         0.81%      41.529ms        34.51%        1.772s      35.435ms            50  
+                                   ConvolutionBackward0         0.03%       1.413ms        28.04%        1.440s       7.199ms           200  
+                             aten::convolution_backward        27.95%        1.435s        28.01%        1.438s       7.192ms           200  
+                                           aten::conv2d         0.02%     904.031us        15.12%     776.482ms       3.882ms           200  
+                                      aten::convolution         0.08%       4.036ms        15.11%     775.578ms       3.878ms           200  
+                                     aten::_convolution         0.04%       2.213ms        15.03%     771.543ms       3.858ms           200  
+                               aten::mkldnn_convolution        14.91%     765.534ms        14.98%     769.330ms       3.847ms           200  
+autograd::engine::evaluate_function: NativeBatchNorm...         0.09%       4.521ms        11.16%     573.013ms       2.865ms           200  
+                               NativeBatchNormBackward0         0.04%       2.269ms        11.07%     568.493ms       2.842ms           200  
+                       aten::native_batch_norm_backward        10.96%     562.715ms        11.03%     566.224ms       2.831ms           200  
+                                       aten::max_pool2d         0.02%     998.841us         8.20%     420.833ms       2.806ms           150  
+                          aten::max_pool2d_with_indices         8.18%     419.834ms         8.18%     419.834ms       2.799ms           150  
+                                       aten::batch_norm         0.02%     847.753us         7.71%     395.706ms       1.979ms           200  
+                           aten::_batch_norm_impl_index         0.04%       2.265ms         7.69%     394.859ms       1.974ms           200  
+                                aten::native_batch_norm         7.60%     390.288ms         7.64%     392.361ms       1.962ms           200  
+     autograd::engine::evaluate_function: ReluBackward0         0.04%       2.275ms         6.74%     346.156ms       1.731ms           200  
+                                          ReluBackward0         0.04%       2.085ms         6.70%     343.881ms       1.719ms           200  
+                               aten::threshold_backward         6.66%     341.796ms         6.66%     341.796ms       1.709ms           200  
+autograd::engine::evaluate_function: MaxPool2DWithIn...         0.05%       2.613ms         6.63%     340.579ms       2.271ms           150  
+                          MaxPool2DWithIndicesBackward0         0.02%       1.160ms         6.58%     337.966ms       2.253ms           150  
+                 aten::max_pool2d_with_indices_backward         3.62%     185.867ms         6.56%     336.806ms       2.245ms           150  
+                                            aten::zero_         0.01%     676.629us         2.94%     150.989ms     754.946us           200  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 5.134s
+
+## By self CPU time (which operators the time is actually spent in)
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                             aten::convolution_backward        27.95%        1.435s        28.01%        1.438s       7.192ms           200  
+                               aten::mkldnn_convolution        14.91%     765.534ms        14.98%     769.330ms       3.847ms           200  
+                       aten::native_batch_norm_backward        10.96%     562.715ms        11.03%     566.224ms       2.831ms           200  
+autograd::engine::evaluate_function: ConvolutionBack...         9.24%     474.592ms        37.29%        1.914s       9.572ms           200  
+                          aten::max_pool2d_with_indices         8.18%     419.834ms         8.18%     419.834ms       2.799ms           150  
+                                aten::native_batch_norm         7.60%     390.288ms         7.64%     392.361ms       1.962ms           200  
+                               aten::threshold_backward         6.66%     341.796ms         6.66%     341.796ms       1.709ms           200  
+                 aten::max_pool2d_with_indices_backward         3.62%     185.867ms         6.56%     336.806ms       2.245ms           150  
+                                            aten::fill_         2.94%     150.757ms         2.94%     150.757ms     502.524us           300  
+                                       aten::clamp_min_         2.17%     111.614ms         2.17%     111.614ms     558.072us           200  
+enumerate(DataLoader)#_MultiProcessingDataLoaderIter...         0.91%      46.569ms         0.92%      47.201ms     944.028us            50  
+                                                forward         0.81%      41.529ms        34.51%        1.772s      35.435ms            50  
+                                               backward         0.64%      32.976ms        62.92%        3.231s      64.615ms            50  
+                                                   data         0.43%      22.196ms         1.35%      69.397ms       1.388ms            50  
+                              Optimizer.step#AdamW.step         0.40%      20.441ms         1.10%      56.325ms       1.126ms            50  
+                                             aten::sqrt         0.22%      11.096ms         0.22%      11.096ms      15.852us           700  
+                                              aten::div         0.20%      10.491ms         0.25%      12.635ms      16.847us           750  
+                                            aten::empty         0.20%      10.142ms         0.20%      10.142ms       2.983us          3400  
+                                       aten::bernoulli_         0.15%       7.555ms         0.15%       7.555ms     151.095us            50  
+                                            aten::relu_         0.10%       5.342ms         2.28%     116.956ms     584.780us           200  
+                                             aten::add_         0.09%       4.741ms         0.15%       7.957ms       4.973us          1600  
+autograd::engine::evaluate_function: NativeBatchNorm...         0.09%       4.521ms        11.16%     573.013ms       2.865ms           200  
+                                             aten::mul_         0.08%       4.346ms         0.14%       7.317ms       5.226us          1400  
+                                          ProfilerStep*         0.08%       4.097ms       100.00%        5.134s     102.686ms            50  
+                                      aten::convolution         0.08%       4.036ms        15.11%     775.578ms       3.878ms           200  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 5.134s

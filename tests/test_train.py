@@ -47,6 +47,19 @@ def test_main_smoke(corpus: Path, tmp_path: Path) -> None:
     assert len(checkpoint["label_map"]) == 12
 
 
+def test_train_one_epoch_splits_time_into_data_and_compute() -> None:
+    features, labels = torch.randn(16, 4), torch.randint(0, 3, (16,))
+    loader = DataLoader(TensorDataset(features, labels), batch_size=4)
+    model = nn.Linear(4, 3)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda step: 1.0)
+
+    m = train.train_one_epoch(model, loader, optimizer, scheduler, nn.CrossEntropyLoss())
+
+    assert m["data_seconds"] > 0 and m["compute_seconds"] > 0
+    assert m["data_seconds"] + m["compute_seconds"] <= m["seconds"]
+
+
 def _lrs_per_step(schedule: str, steps_per_epoch: int = 4) -> list[float]:
     optimizer = torch.optim.SGD([nn.Parameter(torch.zeros(1))], lr=1.0)
     config = {"lr_schedule": schedule, "warmup_epochs": 1, "max_epochs": 5}

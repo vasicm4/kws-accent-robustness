@@ -16,6 +16,16 @@ def set_seed(seed: int) -> None:
     torch.cuda.manual_seed_all(seed)
 
 
+def set_num_threads(num_threads: int | None) -> None:
+    """Intra-op threads for the main process; None keeps PyTorch's default.
+
+    DataLoader workers always run single-threaded, so this only sizes the
+    forward/backward pass.
+    """
+    if num_threads is not None:
+        torch.set_num_threads(num_threads)
+
+
 def seed_worker(worker_id: int) -> None:
     worker_seed = torch.initial_seed() % 2**32
     np.random.seed(worker_seed)
