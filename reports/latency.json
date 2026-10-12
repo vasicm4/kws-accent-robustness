@@ -1,0 +1,34 @@
+{
+  "run": "20261007-214244_e0_channels_last_seed0",
+  "clips": 500,
+  "batch_size": 1,
+  "cpu": "x86_64",
+  "torch": "2.14.0+cu130",
+  "onnxruntime": "1.31.0",
+  "onnx_size_kib": 1097.818359375,
+  "params": 98940,
+  "results": {
+    "pytorch_threads1": {
+      "p50_ms": 0.8549579997634282,
+      "p95_ms": 0.9014930501507479,
+      "mean_ms": 0.8628141339922877
+    },
+    "onnxruntime_threads1": {
+      "p50_ms": 0.5362995002542448,
+      "p95_ms": 0.5592110499037517,
+      "mean_ms": 0.5380624319714116
+    },
+    "top1_agreement_threads1": 1.0,
+    "pytorch_threads8": {
+      "p50_ms": 0.521596999533358,
+      "p95_ms": 0.5730995494104718,
+      "mean_ms": 0.5293888419837458
+    },
+    "onnxruntime_threads8": {
+      "p50_ms": 0.18702399984249496,
+      "p95_ms": 0.2633440500630968,
+      "mean_ms": 0.2006259140180191
+    },
+    "top1_agreement_threads8": 1.0
+  }
+}

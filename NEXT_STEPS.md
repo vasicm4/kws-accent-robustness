@@ -1,63 +1,60 @@
 # Next steps
 
-Working notes for the week-4 experiments (state as of 11 Oct 2026).
+Working notes (state as of 12 Oct 2026, after the week-4/5 experiment batch).
+
+## Done on 12 Oct
+
+- Strided stem decided over 3 seeds: **not adopted** (−0.0036 val macro-F1,
+  rule was ≤ 0.002). E0 = `channels_last`, 3 seeds; README result updated.
+- E1 (3 seeds) and E2 (1 seed): no gain over E0; E2 is worse on official.
+- LR sweep, 1 seed each: 3e-4 clearly worse, **3e-3 better** (see below).
+- `evaluate.py`: confusion matrix and per-class report; `evaluate_accented.py`
+  now also writes the 12-class report and `predictions.npz`.
+- Paired speaker bootstrap: `scripts/compare_runs.py`.
+- E3 few-shot fine-tuning: `scripts/finetune_accented.py`, +0.7 points on
+  held-out accented speakers, −0.3 on official.
+- ONNX export (front end inside the graph), parity test, latency benchmark,
+  FastAPI app, Dockerfile (built and tested locally).
+- Error-analysis notebook and figures in `reports/figures/`.
+- The two weakest speakers are `spk09` (hand-cleaned) and `spk16` (not).
+
+The run logs and orchestration scripts are in `runs/_logs/` (`phase1-3.sh`).
 
 ## Seed policy
 
 Screen with 1 seed, confirm with 3. Single-seed noise is ~0.5 val macro-F1
-points, so a difference smaller than that needs 3 seeds to call.
+points (test), ~0.1 on validation for E0. Model selection uses validation
+macro-F1 only; the accented set is a test set.
 
-- 1 seed: augmentation settings, the first pass of the LR sweep, sanity checks.
-- 3 seeds (0, 1, 2): only configs that go in the final results table
-  (E0, the best of E1/E2, E3).
-- On the accented set, the speaker bootstrap (±4 pts with 19 speakers)
-  dominates seed noise; more seeds don't shrink it, more speakers do.
+## 1. Confirm lr 3e-3 (3 seeds, ~25 min)
 
-## 1. Decide the strided stem (E0, 3 seeds) — interrupted, redo
-
-Seed 0 of both variants exists (`runs/20261007-*`). Seeds 1 and 2 are missing.
-The `channels_last` seed-1 run was stopped at epoch 29/30
-(`runs/20261011-232059_e0_channels_last_seed1`, no `metrics.json`): delete it
-and rerun. About 40 min, run sequentially so epoch times stay comparable:
+One seed of lr 3e-3 beats E0 on val (0.9559 vs. 0.9494 ± 0.0010) and on the
+paired official comparison (+0.6 points, CI [+0.07, +1.19]). Its best epoch
+was 20, so it may also allow a shorter schedule.
 
 ```
-for seed in 1 2; do
-  uv run python src/train.py --set name=e0_channels_last seed=$seed
-  uv run python src/train.py --set name=e0_strided_stem seed=$seed strided_stem=true
-done
-for r in runs/2026*_e0_*/; do uv run python scripts/evaluate_accented.py $r; done
-uv run python scripts/summarize_runs.py e0_channels_last e0_strided_stem
+for seed in 1 2; do uv run python src/train.py --set name=hp_lr3.0e-3 lr=3.0e-3 seed=$seed; done
+for r in runs/*_hp_lr3.0e-3_*/; do uv run python scripts/evaluate_accented.py $r; done
+uv run python scripts/compare_runs.py e0_channels_last hp_lr3.0e-3
 ```
 
-Make `strided_stem: true` the default only if its mean val macro-F1 holds.
-The winner's 3 seeds are the E0 row of the results table; update the README
-result line from them (the current one predates `channels_last`).
+If it holds, make `lr: 3.0e-3` the default, call it the final E0, and rerun
+E3 on its 3 seeds (`scripts/finetune_accented.py`, ~10 min). E1 could be
+rerun at 3e-3 too, since it still peaked at the last epoch at 1e-3.
 
-## 2. Screen E1 and E2 (1 seed each, on the chosen stem)
+## 2. Error analysis: listen
 
-```
-uv run python src/train.py --set augment=true name=e1_shift_noise
-uv run python src/train.py --set augment=true spec_freq_masks=2 spec_time_masks=2 name=e2_specaug
-```
+`notebooks/error_analysis.ipynb` section 2 lists the 20 accented clips every
+seed gets wrong. Listen (`listen(path)`, then clear the output: never commit
+accented audio) and fill in the notes cell: top failure mode, example,
+hypothesis. The current hypothesis (README) is that `right`/`on`/`no` are
+rejected as `_unknown_` because of the Serbian *r* and vowels.
 
-Add `strided_stem=true` to both if step 1 picks it. ~10–12 min each.
-Check the first epochs' data time: augmentation runs in the workers and
-should stay well under 1 s/epoch. Confirm the better one with seeds 1 and 2
-only if it beats E0 by more than the seed noise.
+## Later
 
-## 3. Paired comparison between models
-
-`evaluate_accented.py` gives independent CIs per model. To compare two models
-(E1 vs. E0, E3 vs. E0), bootstrap the *difference* on the same resampled
-speakers: much tighter than comparing two independent CIs. Reuse
-`speaker_bootstrap` / `group_confusions` in `src/evaluate.py`.
-
-## Later this week
-
-- LR sweep (3e-4, 1e-3, 3e-3), 1 seed each.
-- `src/evaluate.py`: confusion matrix and per-class F1 on the official set;
-  error-analysis notebook.
-- Check whether the two weakest accented speakers (0.60, 0.67) are among the
-  hand-cleaned recordings `spk07`–`spk11`.
-- Recruit more speakers if possible (25–30): the main lever on the accented CI.
+- Write `reports/report.md` (outline in the project plan, section 7).
+- Recruit more speakers (25–30): the main lever on the accented CI.
+- Optional E3 control: the gain may partly be phone-codec adaptation.
+- MLflow run `c5765431` (the interrupted 11 Oct run) is still marked
+  RUNNING; mark it killed in the UI.
 - Admin: ask referees this week; check the Eiffel deadline.
