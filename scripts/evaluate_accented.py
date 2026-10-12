@@ -6,7 +6,10 @@ Both sets are scored on the 10 target words only: the accented set has no
 _silence_/_unknown_ clips, so the official test set is restricted to the
 same words to make the gap like-for-like. Predicting _silence_ or
 _unknown_ for a target word still counts as an error. Results go to
-<run>/accented_metrics.json.
+<run>/accented_metrics.json, together with the 12-class confusion matrix and
+per-class F1 on the full official test set; per-clip predictions go to
+<run>/predictions.npz (for scripts/compare_runs.py and the error-analysis
+notebook).
 
 95% confidence intervals come from a speaker-level bootstrap: whole speakers
 are resampled with replacement, independently in each set, and the gap CI is
@@ -24,13 +27,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 from sklearn.metrics import f1_score
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from data import TARGET_WORDS, AccentedEvalDataset, SpeechCommandsDataset  # noqa: E402
-from evaluate import predict, speaker_bootstrap  # noqa: E402
+from evaluate import per_class_report, predict, speaker_bootstrap  # noqa: E402
 from train import build_model, resolve_data_root  # noqa: E402
 
 DEFAULT_CLIPS = REPO_ROOT / "data_accented" / "clips.csv"
@@ -86,12 +89,15 @@ def main() -> None:
     official = SpeechCommandsDataset(
         resolve_data_root(config["data_root"]), "test", config
     )
-    official_targets = [i for i, e in enumerate(official.index) if e.label in TARGET_WORDS]
-    y_true_o, y_pred_o, _ = predict(
-        model,
-        DataLoader(Subset(official, official_targets), batch_size=args.batch_size),
-        criterion,
+    # Predict the whole test set once: the 12-class report uses all of it,
+    # the gap only the target words.
+    y_true_full, y_pred_full, _ = predict(
+        model, DataLoader(official, batch_size=args.batch_size), criterion
     )
+    official_targets = np.array(
+        [i for i, e in enumerate(official.index) if e.label in TARGET_WORDS]
+    )
+    y_true_o, y_pred_o = y_true_full[official_targets], y_pred_full[official_targets]
 
     accented = AccentedEvalDataset(args.clips, args.clips.parent, config)
     y_true_a, y_pred_a, _ = predict(
@@ -104,9 +110,8 @@ def main() -> None:
 
     rng = np.random.default_rng(args.boot_seed)
     target_labels = sorted(target_ids)
-    speakers_o = np.array(
-        [speech_commands_speaker(official.index[i].path) for i in official_targets]
-    )
+    speakers_full = np.array([speech_commands_speaker(e.path) for e in official.index])
+    speakers_o = speakers_full[official_targets]
     speakers_a = np.array([row["speaker"] for row in accented.rows])
     boot_o = speaker_bootstrap(
         y_true_o, y_pred_o, speakers_o, len(label_map), target_labels, args.n_boot, rng
@@ -148,8 +153,31 @@ def main() -> None:
             for w in TARGET_WORDS
         },
         "top_confusions": dict(sorted(confusions.items(), key=lambda kv: -kv[1])[:15]),
+        "labels": [id_to_label[i] for i in range(len(label_map))],
+        "official_test_12class": {
+            "n": int(len(y_true_full)),
+            "acc": float((y_true_full == y_pred_full).mean()),
+            "macro_f1": float(f1_score(
+                y_true_full, y_pred_full, labels=list(range(len(label_map))),
+                average="macro", zero_division=0,
+            )),
+            **per_class_report(y_true_full, y_pred_full, len(label_map)),
+        },
+        "accented_report": per_class_report(y_true_a, y_pred_a, len(label_map)),
     }
     (args.run_dir / "accented_metrics.json").write_text(json.dumps(result, indent=2))
+    np.savez_compressed(
+        args.run_dir / "predictions.npz",
+        official_y_true=y_true_full,
+        official_y_pred=y_pred_full,
+        official_speaker=speakers_full,
+        official_path=np.array([f"{e.path.parent.name}/{e.path.name}" for e in official.index]),
+        official_is_target=np.isin(np.arange(len(official.index)), official_targets),
+        accented_y_true=y_true_a,
+        accented_y_pred=y_pred_a,
+        accented_speaker=speakers_a,
+        accented_path=np.array([row["path"] for row in accented.rows]),
+    )
 
     print(f"run {args.run_dir.name}")
     print(f"95% CI: speaker bootstrap, {args.n_boot} draws")
@@ -173,6 +201,9 @@ def main() -> None:
         print(f"  {w:6s} {result['official_per_word_acc'][w]:.3f} -> "
               f"{result['per_word_acc'].get(w, float('nan')):.3f}")
     print("\nper speaker:", "  ".join(f"{s} {a:.2f}" for s, a in result["per_speaker_acc"].items()))
+    print("\nofficial test, per-class F1 (12 classes):")
+    report = result["official_test_12class"]
+    print("  " + "  ".join(f"{l} {f:.3f}" for l, f in zip(result["labels"], report["f1"])))
     print("\ntop confusions:", ", ".join(f"{k} ({v})" for k, v in result["top_confusions"].items()))
     print(f"\nwrote {args.run_dir / 'accented_metrics.json'}")
 

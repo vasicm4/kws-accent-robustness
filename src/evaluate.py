@@ -67,6 +67,33 @@ def confusion_metrics(
     return acc, f1.mean(axis=-1)
 
 
+def per_class_report(
+    y_true: np.ndarray, y_pred: np.ndarray, n_classes: int
+) -> dict[str, list]:
+    """Confusion matrix (rows = true, columns = predicted) and per-class
+    precision, recall and F1. Classes with no support or no predictions get 0."""
+    cm = np.bincount(y_true * n_classes + y_pred, minlength=n_classes * n_classes)
+    cm = cm.reshape(n_classes, n_classes)
+    tp = np.diag(cm).astype(float)
+    predicted, actual = cm.sum(axis=0), cm.sum(axis=1)
+    precision = np.divide(tp, predicted, out=np.zeros(n_classes), where=predicted > 0)
+    recall = np.divide(tp, actual, out=np.zeros(n_classes), where=actual > 0)
+    denom = predicted + actual
+    f1 = np.divide(2 * tp, denom, out=np.zeros(n_classes), where=denom > 0)
+    return {
+        "confusion": cm.tolist(),
+        "precision": precision.tolist(),
+        "recall": recall.tolist(),
+        "f1": f1.tolist(),
+        "support": actual.tolist(),
+    }
+
+
+def _speaker_weights(n_speakers: int, n_boot: int, rng: np.random.Generator) -> np.ndarray:
+    """How many times each speaker is drawn, per bootstrap sample: (n_boot, n_speakers)."""
+    return rng.multinomial(n_speakers, np.full(n_speakers, 1 / n_speakers), size=n_boot)
+
+
 def speaker_bootstrap(
     y_true: np.ndarray,
     y_pred: np.ndarray,
@@ -82,9 +109,32 @@ def speaker_bootstrap(
     understate the uncertainty. Returns n_boot draws of each metric.
     """
     cms = group_confusions(y_true, y_pred, speakers, n_classes)
-    n_speakers = len(cms)
-    # How many times each speaker is drawn, per bootstrap sample.
-    weights = rng.multinomial(n_speakers, np.full(n_speakers, 1 / n_speakers), size=n_boot)
+    weights = _speaker_weights(len(cms), n_boot, rng)
     boot_cms = np.einsum("bs,skl->bkl", weights, cms)
     acc, macro_f1 = confusion_metrics(boot_cms, labels)
     return {"acc": acc, "macro_f1": macro_f1}
+
+
+def paired_speaker_bootstrap(
+    y_true: np.ndarray,
+    y_preds: list[np.ndarray],
+    speakers: np.ndarray,
+    n_classes: int,
+    labels: list[int],
+    n_boot: int,
+    rng: np.random.Generator,
+) -> list[dict[str, np.ndarray]]:
+    """speaker_bootstrap for several models scored on the same clips, with the
+    same resampled speakers in every draw for all of them.
+
+    Differences between models are then paired: a speaker that is hard for
+    every model moves all of them together and cancels out, so the CI of the
+    difference is much tighter than one built from two independent CIs.
+    """
+    cms = [group_confusions(y_true, y_pred, speakers, n_classes) for y_pred in y_preds]
+    weights = _speaker_weights(len(cms[0]), n_boot, rng)
+    draws = []
+    for cm in cms:
+        acc, macro_f1 = confusion_metrics(np.einsum("bs,skl->bkl", weights, cm), labels)
+        draws.append({"acc": acc, "macro_f1": macro_f1})
+    return draws
