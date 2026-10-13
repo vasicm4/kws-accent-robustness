@@ -42,7 +42,8 @@ strided_stem: false     # true: first block downsamples with a stride-2 conv ins
 # --- Training ---
 batch_size: 128
 max_epochs: 30          # also the cosine horizon: the LR reaches 0 at the end of this epoch
-lr: 1.0e-3              # peak LR after warmup; the hyperparameter swept in HP (3.0e-4, 1.0e-3, 3.0e-3)
+lr: 3.0e-3              # peak LR after warmup; the hyperparameter swept in HP (3.0e-4, 1.0e-3, 3.0e-3).
+                        # 3.0e-3 won over 3 seeds (13 Oct); E0-E2 and the first E3 used 1.0e-3.
 lr_schedule: cosine     # cosine | constant
 warmup_epochs: 1        # linear warmup from ~0 to lr
 weight_decay: 1.0e-2    # AdamW
