@@ -1,5 +1,11 @@
 # kws-accent-robustness
-Measuring and reducing the accuracy gap of a keyword-spotting CNN on Serbian-accented speech.
+
+Measuring and reducing the accuracy gap of a keyword-spotting CNN on
+Serbian-accented speech. A small CNN (99k parameters, CPU-trained) is trained
+on Google Speech Commands v2, then tested on an original, consented set of 19
+Serbian-accented speakers. Two cheap fixes are compared: training-time
+augmentation and few-shot fine-tuning. Full write-up:
+[reports/report.md](reports/report.md).
 
 # Results
 
@@ -11,11 +17,12 @@ on the other speakers. The gap is driven by a few speakers: without the two
 weakest, accented accuracy is 0.964.
 
 E0 on the final defaults (`channels_last`, lr 1e-3), 3 seeds, val macro-F1
-0.9494 ± 0.0010, test macro-F1 0.9522 ± 0.0037. Seed 2:
-`
+0.9494 ± 0.0010, test macro-F1 0.9522 ± 0.0037 (MLflow runs `a1fde9e9` /
+`8f065f3a` / `3c69454d` for seeds 0 / 1 / 2). Final log line of seed 2:
+
+```
 best epoch 27 | val_acc 0.9505 | val_f1 0.9505 | test_acc 0.9552 | test_f1 0.9550
-MLflow runs a1fde9e9 / 8f065f3a / 3c69454d (seeds 0 / 1 / 2)
-`
+```
 
 ## All experiments
 
