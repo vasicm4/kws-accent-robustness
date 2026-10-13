@@ -1,0 +1,5 @@
+# Build context for serve/Dockerfile: only the app and exported models.
+# Without this the context would include data/ (several GB).
+*
+!serve/app.py
+!runs/*/model.onnx

@@ -20,3 +20,12 @@ dependencies = [
 [project.optional-dependencies]
 # scripts/prepare_accented.py: decode phone/WhatsApp audio, optional Whisper check
 accented = ["av", "faster-whisper"]
+# scripts/export_onnx.py, scripts/benchmark_latency.py, serve/app.py and their tests
+serve = [
+    "fastapi>=0.141.1",
+    "httpx>=0.28.1",
+    "onnx>=1.23.2",
+    "onnxruntime>=1.31.0",
+    "onnxscript>=0.7.2",
+    "uvicorn>=0.53.0",
+]

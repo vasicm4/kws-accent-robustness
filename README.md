@@ -1,40 +1,171 @@
 # kws-accent-robustness
-Measuring and reducing the accuracy gap of a keyword-spotting CNN on Serbian-accented speech.
+
+Measuring and reducing the accuracy gap of a keyword-spotting CNN on
+Serbian-accented speech. A small CNN (99k parameters, CPU-trained) is trained
+on Google Speech Commands v2, then tested on an original, consented set of 19
+Serbian-accented speakers. Two cheap fixes are compared: training-time
+augmentation and few-shot fine-tuning. Full write-up:
+[reports/report.md](reports/report.md).
 
 # Results
-`
-best epoch 27 | val_acc 0.9489 | val_f1 0.9490 | test_acc 0.9527 | test_f1 0.9527
-MLflow run 6e4f52f76bfa4a4d9edb8cf569a9b127, git 3624e67
-`
 
-## Accent gap (E0 baseline)
+**Headline:** on the 10 command words, accuracy drops from 0.964 on the Speech
+Commands test set to 0.945 on 19 Serbian-accented speakers (gap 1.9 points,
+95% CI roughly −1.5 to +7 points). Generic augmentation does not close it.
+Fine-tuning on 1 clip per word from 5 accented speakers recovers 1.0 point on
+the other 14 speakers, improves all 9 runs and costs nothing on the official
+set. The gap is driven by a few speakers: without the two weakest, accented
+accuracy is 0.966, level with the official 0.964.
+
+Final model: E0 with lr 3e-3 (the config default since 13 Oct), 3 seeds, val
+macro-F1 0.9559 ± 0.0031, test macro-F1 0.9610 ± 0.0015 (MLflow runs
+`6a299e7e` / `e95ed4d6` / `74ba1499` for seeds 0 / 1 / 2). Final log line of
+seed 0, the median seed:
+
+```
+best epoch 20 | val_acc 0.9561 | val_f1 0.9559 | test_acc 0.9615 | test_f1 0.9616
+```
+
+## All experiments
+
+Mean ± std over seeds. "Official" is the Speech Commands test set (12 classes
+for test F1, the 10 target words for the accuracy and gap columns), "accented"
+the Serbian-accented set, gap = official − accented accuracy. Model selection
+used validation macro-F1 only, never the accented set. E0 to E2 use lr 1e-3,
+so E0 is their reference.
+
+| Experiment | Seeds | Val F1 | Test F1 | Official acc (10 w) | Accented acc | Gap |
+|---|---|---|---|---|---|---|
+| E0 `channels_last`, lr 1e-3 | 3 | 0.9494 ± 0.0010 | 0.9522 ± 0.0037 | 0.9565 ± 0.0032 | 0.9392 ± 0.0000 | 0.0173 ± 0.0032 |
+| E0 + strided stem | 3 | 0.9459 ± 0.0006 | 0.9484 ± 0.0041 | 0.9530 ± 0.0027 | 0.9340 ± 0.0060 | 0.0190 ± 0.0085 |
+| E1 time shift + noise | 3 | 0.9504 ± 0.0042 | 0.9466 ± 0.0029 | 0.9510 ± 0.0041 | 0.9366 ± 0.0069 | 0.0144 ± 0.0049 |
+| E2 E1 + SpecAugment | 1 | 0.9405 | 0.9382 | 0.9458 | 0.9373 | 0.0085 |
+| HP lr 3e-4 | 1 | 0.9274 | 0.9322 | 0.9374 | 0.9216 | 0.0158 |
+| **HP lr 3e-3 (final)** | 3 | 0.9559 ± 0.0031 | 0.9610 ± 0.0015 | 0.9643 ± 0.0024 | 0.9451 ± 0.0052 | 0.0192 ± 0.0028 |
+
+The three lr 1e-3 E0 seeds score exactly 479 of 510 accented clips each, but
+they get different clips wrong (the per-speaker accuracies differ), so the
+± 0.0000 is a coincidence.
+
+![Accent gap per experiment](reports/figures/accent_gap.png)
+
+Paired comparisons against E0 (`scripts/compare_runs.py`: the same speakers
+are resampled for both models, so per-speaker difficulty cancels out; 95% CI):
+
+| vs. E0 | Official acc | Accented acc | Gap |
+|---|---|---|---|
+| strided stem | −0.0035 [−0.0077, +0.0006] | −0.0052 [−0.0205, +0.0088] | +0.0017 [−0.0132, +0.0175] |
+| E1 shift + noise | −0.0055 [−0.0105, −0.0004] | −0.0026 [−0.0121, +0.0061] | −0.0029 [−0.0126, +0.0077] |
+| E2 + SpecAugment | −0.0107 [−0.0196, −0.0023] | −0.0020 [−0.0150, +0.0098] | −0.0088 [−0.0237, +0.0070] |
+| lr 3e-3 | +0.0079 [+0.0039, +0.0119] | +0.0059 [−0.0024, +0.0150] | +0.0020 [−0.0077, +0.0111] |
+
+- **Strided stem: not adopted.** Decision rule fixed before the seeds 1–2
+  runs: adopt it if its mean val macro-F1 is at most 0.002 below
+  `channels_last`. It came out 0.0036 below (seed std ~0.001), so it stays
+  opt-in: 32% faster epochs (15.5 vs. 22.8 s) for ~0.35 points.
+- **Augmentation does not help here.** E1 matches E0 on validation and is
+  slightly worse on the official test; E2 is worse on both. Neither changes
+  accented accuracy or the gap measurably. E1 still peaks at the last epoch
+  (28–30), so it may need a longer schedule than 30 epochs.
+- **Learning rate: 3e-3 adopted.** Screened on 1 seed, confirmed on 3:
+  +0.65 val macro-F1 points (seed std 0.1–0.3) and +0.8 points official
+  accuracy, CI excludes 0. It does not measurably change accented accuracy
+  or the gap: the model gets better everywhere, the gap stays. 3e-4 is
+  clearly too low. E1 and E2 were not rerun at 3e-3.
+- Epoch times for E1 seeds 1–2 and the LR runs were measured with two runs
+  in parallel at 4 threads each (~37 s/epoch); they are not comparable to the
+  sequential runs.
+
+## E3: few-shot fine-tuning on accented speakers
+
+`scripts/finetune_accented.py`: 5 adaptation speakers (drawn from the 16
+with 3 reps), k clips per word each, 200 AdamW steps at lr 1e-4, every batch
+32 accented + 96 replayed Speech Commands clips. Tested on the 14 other
+speakers; 3 random splits × the 3 seeds of the final model. Settings fixed in
+advance, not tuned on accented data (the one design check, frozen vs.
+updating BatchNorm, was decided on the official validation split).
+
+| k | Adaptation clips | Held-out acc before | after | Δ acc | Δ official acc (12 cl.) |
+|---|---|---|---|---|---|
+| 1 | 50 | 0.9481 ± 0.0170 | 0.9580 ± 0.0145 | +0.0099 ± 0.0067 | +0.0010 ± 0.0016 |
+| 3 | 150 | 0.9481 ± 0.0170 | 0.9596 ± 0.0156 | +0.0114 ± 0.0040 | +0.0002 ± 0.0009 |
+
+Mean ± std over the 9 base-seed × split runs. Fine-tuning improves every one
+of the 9 runs for both k, by +1.0 to +1.1 points, with no measurable cost on
+the official set; 3 clips per word are barely better than 1. Each held-out
+set has only 14 speakers, so the per-run paired CIs
+(`runs/<run>/e3_finetune.json`) exclude 0 in 3 of 9 runs for each k. The 9
+runs are not independent either, since splits share speakers and seeds share
+data. On the lr 1e-3 E0 the same procedure gave less (+0.7 points, 6–7 of 9
+runs improved) and cost ~0.3 points on the official set. Part of the gain
+may be channel adaptation (phone codecs) rather than accent adaptation, since
+the two cannot be separated with this data.
+
+![E3 fine-tuning](reports/figures/e3_finetune.png)
+
+## Accent gap and error analysis (final model)
 
 Scored on the 10 target words only, since the accented set has no
 silence/unknown clips. Accented set: 19 speakers, 510 clips
-([data_accented/README.md](data_accented/README.md)).
+([data_accented/README.md](data_accented/README.md)). Details in
+[notebooks/error_analysis.ipynb](notebooks/error_analysis.ipynb). The lr 1e-3
+E0 shows the same pattern.
 
-| Test set | Clips | Accuracy | Macro-F1 |
-|---|---|---|---|
-| Speech Commands test (10 words) | 4074 | 0.9553 | 0.9614 |
-| Serbian-accented | 510 | 0.9353 | 0.9574 |
-| **Gap** | | **0.0200** | **0.0040** |
+- **Top failure mode: accented target words rejected as `_unknown_`.** 64% of
+  accented errors are `→ _unknown_` (vs. 28% on Speech Commands, where most
+  errors are confusions between words such as `on → off`, `go → no`). The
+  most frequent are `on` and `right → _unknown_`, then `down → go`, the one
+  common word-to-word confusion. Hypothesis, still to be checked by
+  listening to the clips the notebook lists: the Serbian realisations
+  (tapped/trilled *r*, a pure vowel in *no* instead of the diphthong /oʊ/, a
+  different vowel in *on*) fall outside what the model learned for these
+  words, so they look more like the many words lumped into `_unknown_` than
+  like any one target.
+- **Hardest words:** `on` 0.88, `right` 0.89, `no` 0.91 on accented speech,
+  vs. 0.94, 0.97 and 0.97 on Speech Commands. `up`, `yes` and `go` are
+  *easier* on the accented set.
+- **The gap is concentrated in two speakers.** `spk09` (0.66) and `spk16`
+  (0.83) are the weakest; `spk09` is the weakest for every model and seed.
+  Without them accented accuracy is 0.966, level with the official 0.964.
+  Only `spk09` is one of the hand-cleaned recordings (`spk07`–`spk11`).
 
-- Most errors on accented speech are target words rejected as `_unknown_`
-  (23 of 33), not confused with another word.
-- Hardest words: `no` and `right` (0.86 each vs. 0.97 and 0.96 on Speech
-  Commands), then `on` (0.90 vs. 0.95).
-- Speakers vary much more than the average suggests: 10 of 19 at ≥ 0.97, two at
-  0.60 and 0.67. With 10–30 clips per speaker these are rough estimates.
+![Per-word accuracy](reports/figures/per_word.png)
+![Accented confusion matrix](reports/figures/confusion_accented.png)
 
-The two E0 speed variants (same model, seed 0) give the same picture; the
-same two speakers are the weakest in all three:
+## Deployment: ONNX + FastAPI
 
-| Run | Official acc | Accented acc | Acc gap | F1 gap |
-|---|---|---|---|---|
-| e0_baseline | 0.9553 | 0.9353 | 0.0200 | 0.0040 |
-| e0_channels_last | 0.9531 | 0.9392 | 0.0139 | 0.0004 |
-| e0_strided_stem | 0.9519 | 0.9392 | 0.0127 | 0.0011 |
+The exported model includes the log-mel front end (the STFT as a fixed
+conv1d), so the server takes raw 16 kHz audio and needs only ONNX Runtime and
+numpy. 98,940 parameters, 1.1 MB ONNX file, 290 MB Docker image.
+
+Latency per 1 s clip, batch 1, AMD Ryzen 7 7735HS, 500 Speech Commands test
+clips, waveform in memory → logits (`reports/latency.json`):
+
+| | 1 thread p50 / p95 | 8 threads p50 / p95 |
+|---|---|---|
+| PyTorch (torchaudio features + model) | 0.86 / 0.90 ms | 0.52 / 0.57 ms |
+| ONNX Runtime (one graph) | 0.54 / 0.56 ms | 0.19 / 0.26 ms |
+
+Top-1 predictions agree on all 500 clips; logits match to < 1e-5
+(`tests/test_onnx_parity.py`).
 
 ```
-uv run python scripts/evaluate_accented.py runs/<run dir>
+uv run --extra serve python scripts/export_onnx.py runs/<run>
+docker build -f serve/Dockerfile --build-arg MODEL=runs/<run>/model.onnx -t kws-serve .
+docker run --rm -p 8000:8000 kws-serve
+curl --data-binary @clip.wav -H "Content-Type: audio/wav" localhost:8000/predict
+```
+
+## How to run
+
+```
+uv run python scripts/download_data.py
+uv run python src/train.py [--set key=value ...]          # configs/baseline.yaml
+uv run python scripts/evaluate_accented.py runs/<run>      # accent gap, CIs, predictions.npz
+uv run python scripts/summarize_runs.py [names ...]        # mean ± std over seeds
+uv run python scripts/compare_runs.py <baseline> <name ...> # paired speaker bootstrap
+uv run python scripts/finetune_accented.py runs/<run> ...  # E3
+uv run python scripts/make_figures.py --main <name> --experiments <name ...>
+uv run --extra serve python scripts/benchmark_latency.py runs/<run>
+uv run --extra serve pytest
 ```

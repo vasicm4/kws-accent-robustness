@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import torch
 
 import data
 from fake_data import SAMPLE_RATE, _write_wav
@@ -141,11 +142,33 @@ def test_speech_commands_dataset_shapes_and_labels(corpus: Path) -> None:
             assert 0 <= label_idx < len(ds.label_map)
 
 
-def test_speech_commands_dataset_augment_not_implemented(corpus: Path) -> None:
+def test_speech_commands_dataset_augment_changes_features(corpus: Path) -> None:
+    config = {
+        "seed": 0, "sample_rate": SAMPLE_RATE, "noise_prob": 1.0,
+        "spec_freq_masks": 2, "spec_time_masks": 2,
+    }
+    plain = data.SpeechCommandsDataset(corpus, "train", config, augment=False)
+    augmented = data.SpeechCommandsDataset(corpus, "train", config, augment=True)
+    idx = next(i for i, e in enumerate(plain.index) if e.label == "yes")
+
+    features, label = augmented[idx]
+    plain_features, plain_label = plain[idx]
+    assert features.shape == plain_features.shape
+    assert label == plain_label
+    assert not torch.equal(features, plain_features)
+    # A fresh draw each time the same clip is loaded.
+    assert not torch.equal(augmented[idx][0], features)
+
+
+def test_speech_commands_dataset_rng_is_remade_after_fork(
+    corpus: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     config = {"seed": 0, "sample_rate": SAMPLE_RATE}
     ds = data.SpeechCommandsDataset(corpus, "train", config, augment=True)
-    with pytest.raises(NotImplementedError):
-        ds[0]
+    parent_rng = ds._get_rng()
+    assert ds._get_rng() is parent_rng
+    monkeypatch.setattr(data.os, "getpid", lambda: -1)  # as in a DataLoader worker
+    assert ds._get_rng() is not parent_rng
 
 
 def test_accented_eval_dataset(tmp_path: Path) -> None:
